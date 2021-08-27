@@ -6,6 +6,7 @@ import serial
 import time
 import re
 
+
 class SerialCom:
     def __init__(self, comport="COM1"):
         self.comport = comport
@@ -40,8 +41,8 @@ class SerialCom:
         fmtresponse = response.strip(lastline)
         return fmtresponse
 
-def msg_readuntil(desiremsg, secs):
 
+def msg_readuntil(desiremsg, secs = 0.5):
     global serctrl
 
     testmsg = serctrl.cmdread()
@@ -58,7 +59,7 @@ Target_SSID = "Synology_520HMX_5G"
 Wifipasskey = "82273585"
 waitstring = "~# "
 
-#iperf test parameter
+# iperf test parameter
 IperfServ = "10.88.88.147"
 
 serctrl = SerialCom("COM5")
@@ -79,7 +80,7 @@ if serctrl.ser.isOpen():
 
     try:
         serctrl.ser.reset_input_buffer()  # flush input buffer
-        serctrl.ser.reset_output_buffer() # flush output buffer
+        serctrl.ser.reset_output_buffer()  # flush output buffer
 
         serdata = ""
         count = 0
@@ -88,57 +89,55 @@ if serctrl.ser.isOpen():
                 serdata = serctrl.cmdread()
                 if serdata != "":
                     print(serdata)
+                else:
+                    print(serdata, end="")
 
             if loginprompt in serdata:
-                #serctrl.ser.write('root\n'.encode('UTF-8'))
+                # serctrl.ser.write('root\n'.encode('UTF-8'))
                 serctrl.cmdsend('root\n')
                 serdata = serctrl.cmdread(waitstring)
                 print("root account is log in")
-                #print(serdata)
+                # print(serdata)
 
-            time.sleep(0.1)
+            time.sleep(0.5)
             count += 1
 
             if count > 30:
                 serctrl.cmdsend('\n')
-                serdata = serctrl.ser.read_all().decode('UTF-8')
+                serdata = serctrl.cmdread()
 
-        time.sleep(3)
+        time.sleep(5)
         serctrl.ser.reset_input_buffer()
         serctrl.ser.reset_output_buffer()
 
-        #check if the wlan0 ip is up
-        serctrl.cmdsend("ifconfig wlan0 | grep 'inet addr'\n")
-        time.sleep(0.5)
-        ipinfo = serctrl.cmdread(waitstring)
+        # check if the wlan0 ip is up
+        for i in range(3):
+            serctrl.cmdsend("ifconfig wlan0 | grep 'inet addr'\n")
+            ipinfo = serctrl.cmdread(waitstring)
+            time.sleep(5)
+            print("%s : check wlan info" %str(i+1))
+            if ipaddrRegex.search(ipinfo):
+                break
+            else:
+                pass
+                print("wlan info check failed")
 
         if ipaddrRegex.search(ipinfo):
             print(ipaddrRegex.search(ipinfo).group())
             print("The wlan connection is up")
 
         else:
-            #serctrl.cmdsend("ifconfig eth0 | grep HWaddr | awk '{print $NF}' | sed 's/://g'\n")
-            #time.sleep(1)
-            #sermacid = serctrl.ser.read_all().decode('UTF-8')
-            #ethmacid = macidRegex.search(sermacid).group()
-            #print(ethmacid)
-
-            #start to config wifi
-
-            #send connmanctl
             serctrl.cmdsenddly("connmanctl\n", 0.5)
             reponse = serctrl.cmdread(">")
             print(reponse)
-            #connmanctl shell
-            #time.sleep(0.5)
             serctrl.cmdsenddly('enable wifi\n', 0.5)
             serctrl.cmdsenddly('scan wifi\n', 2)
             serctrl.cmdsenddly('exit\n', 0.5)
             serctrl.ser.flush()
-            reponse = serctrl.cmdread(">")
+            reponse = serctrl.cmdread()
             print(reponse)
 
-            #shell
+            # shell
             serctrl.cmdsenddly("connmanctl services > /tmp/wifiservices\n", 0.5)
             serctrl.cmdsend("sync\n")
             serctrl.cmdsenddly("cat /tmp/wifiservices | grep ", 0.5)
@@ -147,22 +146,26 @@ if serctrl.ser.isOpen():
             wifisvs = serctrl.cmdread(waitstring)
             time.sleep(1)
 
-            print(wifisvs)
+            # print(wifisvs)
             wifikey = wifiphraseRegex.search(wifisvs).group()
-            print(wifikey)
+            # print(wifikey)
 
-            #connmanctl shell
+            # connmanctl shell
             serctrl.cmdsenddly('connmanctl\n', 1)
-            #connmanctl shell
+            # connmanctl shell
             serctrl.cmdsenddly('agent on\n', 1)
             serctrl.cmdsenddly('connect ', 0.5)
             serctrl.cmdsenddly(wifikey, 0.5)
-            serctrl.cmdsenddly('\n', 0.5)
-            #enter Passphrase
-            serctrl.cmdsend(Wifipasskey)
-            serctrl.cmdsenddly('\n', 3)
-            print(serctrl.cmdread())
-            time.sleep(3)
+            serctrl.cmdsend('\n')
+            # enter Passphrase
+            connreact = serctrl.cmdread('>')
+            if "Already connected" in connreact or "wlan0: link becomes ready" in connreact:
+                pass
+            else:
+                serctrl.cmdsend(Wifipasskey)
+                serctrl.cmdsenddly('\n', 3)
+                print(serctrl.cmdread())
+                time.sleep(3)
 
             serctrl.cmdsend('state\n')
             print(serctrl.cmdread())
@@ -172,7 +175,7 @@ if serctrl.ser.isOpen():
             print("wifi connection completed")
             serctrl.cmdsenddly("\n", 2)
 
-        #iperf test
+        # iperf test
         print("Iperf TX - Upload test")
         serctrl.cmdsend("iperf3 -c ")
         serctrl.cmdsend(IperfServ)
@@ -203,7 +206,7 @@ if serctrl.ser.isOpen():
 
         print("iperf test completed")
 
-            #close console
+        # close console
         serctrl.ser.close()
         print("the comport is closed")
 
@@ -214,6 +217,3 @@ if serctrl.ser.isOpen():
 
 else:
     print("open serial port error")
-
-
-
