@@ -2,6 +2,8 @@
 The purpose of this script : dump the frame buffer data from QC disk
 The script is only supported on ubuntu platform
 reuired utilit - fbtopng
+
+revise : 2021/09/06 - extra config file to text file
 """
 
 import os
@@ -55,7 +57,25 @@ def msg_readuntil(desiremsg, secs = 0.5):
         testmsg = serctrl.cmdread()
         time.sleep(secs)
     print(testmsg)
+    return testmsg
 # ---------- Subfunction for reading message from console End----------
+
+#----------- Subfunction for obtain config setting start --------------
+def sys_config_loader(config_file):
+    file_check_result = os.system("test -f " + config_file)
+    if file_check_result == 0:
+        f = open(config_file, 'r', encoding='UTF-8')
+        conf_que = []
+        for line in f:
+                conf_text = str(line).split(":")
+                conf_que.append(conf_text[1].strip('\n'))
+        return conf_que
+        f.close()
+    else:
+        f.close()
+        print("the config file :", config, "is not existed !")
+
+#----------- Subfunction for obtain config setting end   --------------
 
 def dot_print(x):
     for i in range(x):
@@ -67,11 +87,16 @@ loginprompt = "~#"
 raw_file = "fb0.raw"
 fbdev = "/dev/fb0"
 png_file = "fb0.png"
-remote_serv = "10.88.88.147"
+
+#conf_params[0] : serial port , conf_params[1] : ip address
+conf_params = sys_config_loader("sys.conf")
+#remote_serv = "10.88.88.147"
+remote_serv = conf_params[1]
 
 Res_W_H_Regex = re.compile("\d{3,4}x\d{3,4}")
 
-serctrl = SerialCom("/dev/ttyUSB0")
+#serctrl = SerialCom("/dev/ttyS0")
+serctrl = SerialCom(conf_params[0])
 
 try:
     serctrl.ser.open()
@@ -94,7 +119,7 @@ if serctrl.ser.isOpen():
         res_msg = serctrl.cmdread()
 
         # set the partition writable
-        if "ext3 ro" in res_msg:
+        if "ext3 ro" in res_msg or "ext4 ro" in res_msg:
             serctrl.cmdsenddly("mount / -o remount,rw\n", 0.5)
             res_msg = serctrl.cmdread()
             print("working partition is set to r/w")
@@ -112,6 +137,17 @@ if serctrl.ser.isOpen():
         pic_width = pic_size[0]
         pic_height = pic_size[1]
 
+    # check if /dev/root is availalbe
+    #    print("check available space for /dev/root ...")
+    #    serctrl.cmdsend("df -h | awk 'NR==2 {print $4,$5}'")
+    #    response_text = serctrl.cmdread("root@")
+    #    print(response_text)
+
+    #    if "0 100%" in response_text:
+    #        store_dst = "/var/volatile/tmp/"
+    #    else:
+    #        store_dst = "/dev/root/"
+
     # dump framebuffer fb0 to local disk
         print("dump framebuffer data")
         serctrl.cmdsend("dd if=")
@@ -126,11 +162,11 @@ if serctrl.ser.isOpen():
         #serctrl.cmdsenddly("./stop.sh\n", 1)
         #print(serctrl.cmdread())
         #print("stop qc script ...")
-        dot_print(10)
+        #ot_print(15)
 
         serctrl.cmdsenddly("udhcpc\n", 1)
         #print(serctrl.cmdread())
-        dot_print(10)
+        dot_print(15)
 
     # local command
     # set nc command for listening
@@ -160,7 +196,7 @@ if serctrl.ser.isOpen():
         time.sleep(0.5)
 
     # raw file clear for local and remote
-        os.system("rm -rf %s" %(raw_file))
+        #os.system("rm -rf %s" %(raw_file))
         serctrl.cmdsenddly("rm -rf " + raw_file + "\n", 0.5)
         print(serctrl.cmdread())
 
